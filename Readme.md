@@ -73,6 +73,7 @@ InterviewMate/
 - **id**: Auto-increment primary key
 - **interviewee_name**: Name of the interviewee  
 - **role**: Position being interviewed for
+- **technologies**: Array of technologies/skills to focus on
 - **interview_id**: Auto-generated unique ID (e.g., INT-A1B2C3D4)
 - **interview_time**: Scheduled date and time
 - **status**: scheduled | completed | cancelled | rescheduled
@@ -96,6 +97,7 @@ curl -X POST http://localhost:3000/api/interviews \
   -d '{
     "interviewee_name": "Jane Smith", 
     "role": "Software Engineer",
+    "technologies": ["JavaScript", "React", "Node.js", "PostgreSQL"],
     "interview_time": "2025-08-25T10:00:00.000Z"
   }'
 ```

@@ -24,6 +24,9 @@ router.get('/status/:status', interviewController.getInterviewsByStatus);
 // Get interviews by interviewee
 router.get('/interviewee/:interviewee', interviewController.getInterviewsByInterviewee);
 
+// Get interviews by technology
+router.get('/technology/:technology', interviewController.getInterviewsByTechnology);
+
 // Get interview by interview ID (custom ID)
 router.get('/interview-id/:interviewId', interviewController.getInterviewByInterviewId);
 

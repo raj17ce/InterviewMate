@@ -154,6 +154,22 @@ const interviewController = {
     }
   },
 
+  // Get interviews by technology
+  async getInterviewsByTechnology(req, res, next) {
+    try {
+      const { technology } = req.params;
+      const interviews = await Interview.findByTechnology(technology);
+      res.json({
+        success: true,
+        message: 'Interviews retrieved successfully',
+        data: interviews,
+        count: interviews.length
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   // Get interviews by status
   async getInterviewsByStatus(req, res, next) {
     try {

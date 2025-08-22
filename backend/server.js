@@ -7,6 +7,7 @@ require('dotenv').config();
 const errorHandler = require('./middleware/errorHandler');
 const indexRoutes = require('./routes/index');
 const interviewRoutes = require('./routes/interviews');
+const questionRoutes = require('./routes/questions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,7 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api', indexRoutes);
 app.use('/api/interviews', interviewRoutes);
+app.use('/api/questions', questionRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

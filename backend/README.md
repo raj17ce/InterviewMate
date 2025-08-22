@@ -51,6 +51,7 @@ CREATE TABLE interviews (
   id SERIAL PRIMARY KEY,
   interviewee_name VARCHAR(255) NOT NULL,
   role VARCHAR(255) NOT NULL,
+  technologies TEXT[],
   interview_id VARCHAR(50) UNIQUE NOT NULL,
   interview_time TIMESTAMP NOT NULL,
   status VARCHAR(50) DEFAULT 'scheduled',
@@ -63,6 +64,7 @@ CREATE TABLE interviews (
 - **id**: Auto-increment primary key
 - **interviewee_name**: Name of the interviewee  
 - **role**: Position being interviewed for
+- **technologies**: Array of technologies/skills to focus on
 - **interview_id**: Auto-generated unique ID (e.g., INT-A1B2C3D4)
 - **interview_time**: Scheduled date and time
 - **status**: scheduled | completed | cancelled | rescheduled
@@ -111,6 +113,7 @@ Content-Type: application/json
 {
   "interviewee_name": "Jane Smith",
   "role": "Software Engineer",
+  "technologies": ["JavaScript", "React", "Node.js", "PostgreSQL"],
   "interview_time": "2025-08-25T10:00:00.000Z"
 }
 ```
@@ -124,6 +127,7 @@ Content-Type: application/json
     "id": 1,
     "interviewee_name": "Jane Smith",
     "role": "Software Engineer",
+    "technologies": ["JavaScript", "React", "Node.js", "PostgreSQL"],
     "interview_id": "INT-A1B2C3D4",
     "interview_time": "2025-08-25T10:00:00.000Z",
     "status": "scheduled",
