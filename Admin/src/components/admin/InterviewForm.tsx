@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
+const API_BASE_URL = "http://10.40.1.152:3000";
+
 const interviewSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   role: z.string().min(2, "Role is required"),
@@ -28,10 +30,10 @@ type InterviewFormData = z.infer<typeof interviewSchema>;
 interface InterviewFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: InterviewFormData) => void;
+  onSuccess: () => void; // called after successful POST
 }
 
-export function InterviewForm({ open, onOpenChange, onSubmit }: InterviewFormProps) {
+export function InterviewForm({ open, onOpenChange, onSuccess }: InterviewFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -41,16 +43,50 @@ export function InterviewForm({ open, onOpenChange, onSubmit }: InterviewFormPro
 
   const handleSubmit = async (data: InterviewFormData) => {
     setIsSubmitting(true);
+    let interviewDate: Date;
+    
+    if (data.date instanceof Date) {
+      // If formData.date is already a Date object
+      // Parse time string (formData.time is in "HH:mm" format)
+      const [hours, minutes] = data.time.split(":").map(Number);
+      
+      // Create a new Date object from data.date and set the time
+      interviewDate = new Date(data.date);
+      interviewDate.setHours(hours, minutes, 0, 0);
+    } else {
+      // If date is a string, parse it
+      interviewDate = new Date(data.date + "T" + data.time);
+    }
+    
+    // Convert technologies string to array by splitting on commas and trimming whitespace
+    const technologiesArray = data.technologies
+      .split(',')
+      .map(tech => tech.trim())
+      .filter(tech => tech.length > 0); // Remove empty items
+    
+    // Create the API payload with the correct format
+    const apiPayload = {
+      interviewee_name: data.name,
+      role: data.role,
+      technologies: technologiesArray, // Send as array
+      interview_time: interviewDate.toISOString()
+    };
+    
+    console.log("Sending to API:", apiPayload);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      onSubmit(data);
+      const res = await fetch(`${API_BASE_URL}/api/interviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiPayload),
+      });
+      if (!res.ok) throw new Error("Failed to schedule interview");
       form.reset();
       onOpenChange(false);
       toast({
         title: "Interview Scheduled!",
         description: "The interview has been successfully scheduled.",
       });
+      onSuccess(); // refresh meetings
     } catch (error) {
       toast({
         title: "Error",
