@@ -292,10 +292,65 @@
                 padding: 16px;
             }
         }
+
+        /* Meeting ID Modal Styles */
+        #meetingIdModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.4);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #meetingIdModal > div {
+            background: white;
+            padding: 32px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+            min-width: 320px;
+            max-width: 90vw;
+            text-align: center;
+        }
+
+        #meetingIdModal h2 {
+            margin-bottom: 18px;
+            font-size: 1.3rem;
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        #meetingIdModal input {
+            padding: 12px 16px;
+            width: 80%;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+            margin-bottom: 18px;
+            outline: none;
+        }
+
+        #meetingIdModal button {
+            width: 80%;
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <div id="meetingIdModal">
+        <div>
+            <h2>Enter Meeting ID</h2>
+            <input id="meetingIdInput" type="text" placeholder="Meeting ID" autofocus />
+            <br />
+            <button id="meetingIdSubmit" class="btn btn-primary">Continue</button>
+        </div>
+    </div>
+
+    <div class="app-container" id="mainApp" style="filter:blur(2px);pointer-events:none;user-select:none;">
         <header class="app-header">
             <div class="app-logo">
                 <i class="fas fa-video"></i>
@@ -319,6 +374,12 @@
                     </div>
                 </div>
                 
+                <!-- Add question display container -->
+                <div class="question-container" style="margin-bottom: 20px; padding: 15px; background: var(--bg-light); border-radius: var(--radius-sm); border: 1px solid rgba(0,0,0,0.1);">
+                    <h3 style="margin-bottom: 10px; font-size: 16px; color: var(--text-secondary);">Current Question:</h3>
+                    <p id="currentQuestion" style="font-size: 18px; color: var(--text-primary); font-weight: 500;">Waiting for question...</p>
+                </div>
+
                 <div class="video-container">
                     <video autoplay id="videoElement"></video>
                     <div class="video-status">
@@ -442,7 +503,7 @@
             }
         });
 
-        nextButton.addEventListener('click', () => {
+        nextButton.addEventListener('click', async () => {
             if (isListening) {
                 recognition.stop();
                 isListening = false;
@@ -454,6 +515,46 @@
                 statusText.textContent = "Ready";
                 recordingIndicator.classList.remove('recording');
                 recognitionStatus.textContent = "Ready for next question";
+            }
+
+            // Cancel any ongoing speech
+            window.speechSynthesis.cancel();
+
+            // Fetch next question
+            try {
+                const response = await fetch(`http://10.40.1.152:3000/api/questions/generate?interview_id=${window.meetingId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Fetched next question:', data);
+                    if (data.data.question_text) {
+                        console.log('Inside if block');
+                        const questionElement = document.getElementById('currentQuestion');
+                        questionElement.textContent = data.data.question_text;
+
+                        // Clear previous transcript and show question
+                        fullTranscript = '';
+                        // transcriptOutput.textContent = "Question: " + data.data.question_text;
+                        // transcriptOutput.style.color = 'var(--text-primary)';
+
+                        // Speak the new question
+                        const utterance = new SpeechSynthesisUtterance(data.data.question_text);
+                        utterance.rate = 0.9;
+                        utterance.pitch = 1;
+                        
+                        utterance.onend = () => {
+                            if (!isListening) {
+                                startButton.click(); // Start recording when speech ends
+                            }
+                        };
+
+                        window.speechSynthesis.speak(utterance);
+                    } else {
+                        console.log('No question text found');
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching next question:', error);
+                recognitionStatus.textContent = "Error fetching next question";
             }
         });
 
@@ -550,7 +651,7 @@
                     };
                     
                     // Send POST request to backend
-                    const response = await fetch('https://your-backend-api.com/transcripts', {
+                    const response = await fetch('https://10.40.1.152:3000/transcripts', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -589,6 +690,158 @@
         // Help button functionality
         helpButton.addEventListener('click', () => {
             alert("InterviewMate Instructions:\n\n1. Position yourself in the camera frame\n2. Click 'Start Recording' to begin speech recognition\n3. Speak clearly to answer the interview question\n4. Click 'Stop Recording' to pause or 'Next Question' to finish\n5. Your transcribed response will appear in the right panel\n6. Use the Copy or Save buttons to keep your response");
+        });
+
+        // Meeting ID modal logic
+        const meetingIdModal = document.getElementById('meetingIdModal');
+        const meetingIdInput = document.getElementById('meetingIdInput');
+        const meetingIdSubmit = document.getElementById('meetingIdSubmit');
+        const mainApp = document.getElementById('mainApp');
+
+        // Check for existing interview data
+        const checkExistingSession = () => {
+            const savedInterviewData = localStorage.getItem('interviewData');
+            const savedMeetingId = localStorage.getItem('meetingId');
+            
+            if (savedInterviewData && savedMeetingId) {
+                const interviewData = JSON.parse(savedInterviewData);
+                window.meetingId = savedMeetingId;
+                window.interviewData = { data: interviewData };
+                
+                // Hide modal and show main app
+                meetingIdModal.style.display = 'none';
+                mainApp.style.filter = '';
+                mainApp.style.pointerEvents = '';
+                mainApp.style.userSelect = '';
+                
+                // Update UI with interview data
+                const cardTitle = document.querySelector('.card-title');
+                cardTitle.textContent = `Interview: ${interviewData.role}`;
+                
+                console.log('Restored interview data:', interviewData);
+            }
+        };
+        
+        // Check for existing session when page loads
+        checkExistingSession();
+        
+        meetingIdSubmit.addEventListener('click', async () => {
+            const meetingId = meetingIdInput.value.trim();
+            if(meetingId) {
+                try {
+                    // Show loading state
+                    const originalText = meetingIdSubmit.textContent;
+                    meetingIdSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+                    meetingIdSubmit.disabled = true;
+                    
+                    // Make API request to verify the meeting ID
+                    const response = await fetch(`http://10.40.1.152:3000/api/interviews/interview-id/${meetingId}`);
+
+                    if (response.ok) {
+                        // If successful, show the main app
+                        const data = await response.json();
+                        console.log('Interview data:', data);
+                        
+                        // Store interview data in localStorage
+                        const interviewData = {
+                            id: data.data.id,
+                            interview_id: data.data.interview_id,
+                            interviewee_name: data.data.interviewee_name,
+                            role: data.data.role,
+                            interview_time: data.data.interview_time,
+                            technologies: data.data.technologies,
+                            status: data.data.status,
+                            created_at: data.data.created_at,
+                            updated_at: data.data.updated_at
+                        };
+                        localStorage.setItem('interviewData', JSON.stringify(interviewData));
+                        localStorage.setItem('meetingId', meetingId);
+                        
+                        // Hide modal and show main app
+                        meetingIdModal.style.display = 'none';
+                        mainApp.style.filter = '';
+                        mainApp.style.pointerEvents = '';
+                        mainApp.style.userSelect = '';
+                        
+                        // Store meeting ID and interview data in window for immediate access
+                        window.meetingId = meetingId;
+                        window.interviewData = data;
+                        
+                        // Update UI with interview data
+                        document.querySelector('.card-title').textContent = `Interview: ${data.data.role}`;
+
+                        // Fetch and speak the first question
+                        try {
+                            const questionResponse = await fetch(`http://10.40.1.152:3000/api/questions/generate?interview_id=${meetingId}`);
+                            if (questionResponse.ok) {
+                                const questionData = await questionResponse.json();
+                                if (questionData.question) {
+                                    const questionElement = document.getElementById('currentQuestion');
+                                    questionElement.textContent = questionData.question;
+
+                                    // Show question in transcript
+                                    transcriptOutput.textContent = "Question: " + questionData.question;
+                                    transcriptOutput.style.color = 'var(--text-primary)';
+
+                                    // Initialize speech synthesis
+                                    const synth = window.speechSynthesis;
+                                    const utterance = new SpeechSynthesisUtterance(questionData.question);
+                                    
+                                    // Configure speech settings
+                                    utterance.rate = 0.9; // Slightly slower for clarity
+                                    utterance.pitch = 1;
+                                    
+                                    // When speech ends, start recording automatically
+                                    utterance.onend = () => {
+                                        if (!isListening) {
+                                            startButton.click(); // Simulate click to start recording
+                                        }
+                                    };
+
+                                    // Speak the question
+                                    synth.speak(utterance);
+                                }
+                            } else {
+                                throw new Error('Failed to fetch question');
+                            }
+                        } catch (error) {
+                            console.error('Error fetching first question:', error);
+                            recognitionStatus.textContent = "Error fetching question";
+                        }
+                    }else {
+                        // If error, show error message
+                        throw new Error('Invalid meeting ID');
+                    }
+                } catch (error) {
+                    console.error('Error verifying meeting ID:', error);
+                    meetingIdInput.style.borderColor = 'var(--warning)';
+                    
+                    // Add error message below input
+                    const errorMsg = document.getElementById('meetingIdError') || document.createElement('p');
+                    errorMsg.id = 'meetingIdError';
+                    errorMsg.textContent = 'Invalid meeting ID. Please try again.';
+                    errorMsg.style.color = 'var(--warning)';
+                    errorMsg.style.margin = '0 0 16px 0';
+                    errorMsg.style.fontSize = '14px';
+                    
+                    if (!document.getElementById('meetingIdError')) {
+                        meetingIdInput.insertAdjacentElement('afterend', errorMsg);
+                    }
+                    
+                    meetingIdInput.focus();
+                } finally {
+                    // Reset button
+                    meetingIdSubmit.innerHTML = 'Continue';
+                    meetingIdSubmit.disabled = false;
+                }
+            } else {
+                meetingIdInput.style.borderColor = 'var(--warning)';
+                meetingIdInput.focus();
+            }
+        });
+        
+        meetingIdInput.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter') meetingIdSubmit.click();
         });
     </script>
 </body>
