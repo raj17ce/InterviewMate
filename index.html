@@ -673,17 +673,13 @@
                             const questionResponse = await fetch(`http://10.40.1.152:3000/api/questions/generate?interview_id=${meetingId}`);
                             if (questionResponse.ok) {
                                 const questionData = await questionResponse.json();
-                                if (questionData.question) {
+                                if (questionData.data.question_text) {
                                     const questionElement = document.getElementById('currentQuestion');
-                                    questionElement.textContent = questionData.question;
-
-                                    // Show question in transcript
-                                    transcriptOutput.textContent = "Question: " + questionData.question;
-                                    transcriptOutput.style.color = 'var(--text-primary)';
+                                    questionElement.textContent = questionData.data.question_text;
 
                                     // Initialize speech synthesis
                                     const synth = window.speechSynthesis;
-                                    const utterance = new SpeechSynthesisUtterance(questionData.question);
+                                    const utterance = new SpeechSynthesisUtterance(questionData.data.question_text);
                                     
                                     // Configure speech settings
                                     utterance.rate = 0.9; // Slightly slower for clarity
