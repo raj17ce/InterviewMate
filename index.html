@@ -423,10 +423,16 @@
     </div>
 
     <script>
-        // Clear localStorage on page refresh/unload
+        // Clear localStorage and stop speech on page refresh/unload
         window.onbeforeunload = function() {
+            // Clear localStorage
             localStorage.removeItem('interviewData');
             localStorage.removeItem('meetingId');
+            
+            // Cancel any ongoing speech
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
         };
 
         // Access the webcam
@@ -464,6 +470,11 @@
 
         // Handle the Start button
         startButton.addEventListener('click', () => {
+            // Cancel any ongoing speech
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+
             if (!isListening) {
                 fullTranscript = '';
                 transcriptOutput.textContent = 'Listening to your response...';
@@ -493,6 +504,11 @@
         });
 
         nextButton.addEventListener('click', async () => {
+            // Cancel any ongoing speech first
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+
             if (isListening) {
                 recognition.stop();
                 isListening = false;
@@ -506,9 +522,6 @@
                 recognitionStatus.textContent = "Ready for next question";
             }
 
-            // Cancel any ongoing speech
-            window.speechSynthesis.cancel();
-
             // Fetch next question
             try {
                 const response = await fetch(`http://10.40.1.152:3000/api/questions/generate?interview_id=${window.meetingId}`);
@@ -516,6 +529,10 @@
                     const data = await response.json();
                     console.log('Fetched next question:', data);
                     if (data.data.question_text) {
+                        // Clear previous response
+                        transcriptOutput.textContent = '';
+                        fullTranscript = '';
+                        
                         console.log('Inside if block');
                         const questionElement = document.getElementById('currentQuestion');
                         questionElement.textContent = data.data.question_text;
