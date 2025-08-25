@@ -12,10 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export interface Interview {
-  id: string;
   name: string;
   role: string;
-  technologies: string;
+  technologies: string[] | string; // Can be array or string
   date: Date;
   time: string;
   meetingId: string;
@@ -58,37 +57,37 @@ export function InterviewTable({ interviews }: InterviewTableProps) {
           <Table>
             <TableHeader>
               <TableRow className="bg-admin-bg hover:bg-admin-bg">
-                <TableHead className="font-medium">
+                <TableHead key="meeting-id" className="font-medium">
                   <div className="flex items-center gap-2">
                     <Hash className="w-4 h-4" />
                     Meeting ID
                   </div>
                 </TableHead>
-                <TableHead className="font-medium">
+                <TableHead key="name" className="font-medium">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4" />
                     Name
                   </div>
                 </TableHead>
-                <TableHead className="font-medium">
+                <TableHead key="role" className="font-medium">
                   <div className="flex items-center gap-2">
                     <Briefcase className="w-4 h-4" />
                     Role
                   </div>
                 </TableHead>
-                <TableHead className="font-medium">
+                <TableHead key="technologies" className="font-medium">
                   <div className="flex items-center gap-2">
                     <Code className="w-4 h-4" />
                     Technologies
                   </div>
                 </TableHead>
-                <TableHead className="font-medium">
+                <TableHead key="date" className="font-medium">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     Date
                   </div>
                 </TableHead>
-                <TableHead className="font-medium">
+                <TableHead key="time" className="font-medium">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4" />
                     Time
@@ -110,11 +109,32 @@ export function InterviewTable({ interviews }: InterviewTableProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {interview.technologies.split(',').map((tech, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {tech.trim()}
+                      {interview.technologies ? (
+                        Array.isArray(interview.technologies) ? 
+                          // If technologies is an array, map through it
+                          interview.technologies.map((tech, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {typeof tech === 'string' ? tech.trim() : tech}
+                            </Badge>
+                          ))
+                        : 
+                          // If technologies is a string, split it by comma
+                          typeof interview.technologies === 'string' ?
+                            interview.technologies.split(',').map((tech, index) => (
+                              <Badge key={index} variant="outline" className="text-xs">
+                                {tech.trim()}
+                              </Badge>
+                            ))
+                          :
+                            // Fallback for any other type
+                            <Badge variant="outline" className="text-xs">
+                              {String(interview.technologies)}
+                            </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          No technologies specified
                         </Badge>
-                      ))}
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>{format(interview.date, "PPP")}</TableCell>

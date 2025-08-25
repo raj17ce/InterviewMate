@@ -3,16 +3,16 @@ const { v4: uuidv4 } = require('uuid');
 
 class Interview {
   static async create(interviewData) {
-    const { interviewee_name, role, interview_time } = interviewData;
+    const { interviewee_name, role, technologies, interview_time } = interviewData;
     const interview_id = `INT-${uuidv4().substring(0, 8).toUpperCase()}`;
     
     const query = `
-      INSERT INTO interviews (interviewee_name, role, interview_id, interview_time)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO interviews (interviewee_name, role, technologies, interview_id, interview_time)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *;
     `;
     
-    const values = [interviewee_name, role, interview_id, interview_time];
+    const values = [interviewee_name, role, technologies || [], interview_id, interview_time];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -93,6 +93,16 @@ class Interview {
       ORDER BY interview_time ASC;
     `;
     const result = await pool.query(query, [`%${interviewee_name}%`]);
+    return result.rows;
+  }
+
+  static async findByTechnology(technology) {
+    const query = `
+      SELECT * FROM interviews 
+      WHERE $1 = ANY(technologies)
+      ORDER BY interview_time ASC;
+    `;
+    const result = await pool.query(query, [technology]);
     return result.rows;
   }
 
