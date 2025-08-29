@@ -12,16 +12,15 @@ function getQuestionPrompt(currentQuestion, totalQuestions, lastAnswer, technolo
     You are an AI interviewer for a ${technology} developer position.
     You are currently on question ${currentQuestion} out of ${totalQuestions}.
 
-    The candidate's previous answer was:
+    The candidate's previous question was:
     "${lastAnswer}"
 
     Based on this answer, create the next valuable interview question.
     - The question should build on or challenge what the candidate said.
-    - If the previous answer is incomplete, vague, or shows gaps, ask a probing question.
     - If the answer is strong, go deeper into advanced concepts.
     - By the end of ${totalQuestions} questions we must have covered: fundamentals, advanced concepts, problem solving, performance, testing, architecture, and best practices (adapted for ${technology}).
 
-    Only return the next question text, nothing else.
+    Only return the next question text, nothing else. Don't include delimiters or anything since this will be converted to speech for the candidate to hear.
   `;
 }
 

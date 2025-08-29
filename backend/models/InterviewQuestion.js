@@ -1,32 +1,93 @@
 const pool = require('../config/database');
+const { getQuestionPrompt } = require('../utils/prompts');
+
+// Import fetch for Node.js compatibility
+let fetch;
+(async () => {
+  if (typeof globalThis.fetch === 'undefined') {
+    try {
+      const { default: nodeFetch } = await import('node-fetch');
+      fetch = nodeFetch;
+    } catch (error) {
+      console.warn('node-fetch not available, using global fetch');
+      fetch = globalThis.fetch;
+    }
+  } else {
+    fetch = globalThis.fetch;
+  }
+})();
 
 class InterviewQuestion {
-  // Generate and store questions for an interview
-  static async generateQuestions(interviewId, role, technologies = [], questionCount = 5) {
+  // Generate and store a single question for an interview
+  static async generateQuestions(interviewId, role, technologies = []) {
     try {
-      const questions = this.getQuestionsByRoleAndTech(role, technologies, questionCount);
-      const createdQuestions = [];
+      // Determine the primary technology to focus on
+      const primaryTech = technologies.length > 0 ? technologies[0] : role;
+      
+      // Get the last question from database for this interview
+      const existingQuestions = await this.getByInterviewId(interviewId);
+      const lastQuestion = existingQuestions.length > 0 ? existingQuestions[existingQuestions.length - 1] : null;
+      const lastQuestionText = lastQuestion ? lastQuestion.question_text : "";
+      const currentQuestionNumber = existingQuestions.length + 1;
+      
+      // Generate prompt using utility function with context
+      const prompt = getQuestionPrompt(currentQuestionNumber, 5, lastQuestionText, primaryTech);
 
-      for (const question of questions) {
+      try {
+        // Call LLM API
+        const response = await fetch("http://10.40.1.148:11434/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama3.1:latest",
+            prompt: prompt,
+            stream: false
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`LLM API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        let questionText = data.response.trim();
+        
+        // Clean up the response - remove any extra formatting
+        questionText = questionText.replace(/^(Question:|Q:|Answer:|A:|\d+\.|\-)/i, '').trim();
+        
+        // Ensure it ends with a question mark
+        if (!questionText.endsWith('?')) {
+          questionText += '?';
+        }
+
+        // Insert only interview_id and question_text into database
         const query = `
-          INSERT INTO interview_questions (interview_id, question_text, question_type, difficulty_level, expected_answer)
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
+          INSERT INTO interview_questions (interview_id, question_text)
+          VALUES ($1, $2)
+          RETURNING id, interview_id, question_text, created_at
         `;
         
-        const values = [
-          interviewId,
-          question.text,
-          question.type,
-          question.difficulty,
-          question.expectedAnswer
-        ];
-
+        const values = [interviewId, questionText];
         const result = await pool.query(query, values);
-        createdQuestions.push(result.rows[0]);
-      }
+        return result.rows[0];
 
-      return createdQuestions;
+      } catch (error) {
+        console.error(`Error generating question with LLM:`, error);
+        
+        // Fallback question if LLM fails
+        const questionNumber = existingQuestions.length + 1;
+        const fallbackQuestion = `Tell me about your experience with ${primaryTech} and how you approach solving problems with it (Question ${questionNumber})?`;
+        
+        const query = `
+          INSERT INTO interview_questions (interview_id, question_text)
+          VALUES ($1, $2)
+          RETURNING id, interview_id, question_text, created_at
+        `;
+        
+        const values = [interviewId, fallbackQuestion];
+        const result = await pool.query(query, values);
+        return result.rows[0];
+      }
     } catch (error) {
       throw error;
     }
@@ -104,221 +165,6 @@ class InterviewQuestion {
     } catch (error) {
       throw error;
     }
-  }
-
-  // Generate questions based on role and technologies
-  static getQuestionsByRoleAndTech(role, technologies = [], count = 5) {
-    const questionBank = {
-      'Full Stack Developer': [
-        {
-          text: 'Explain the difference between REST and GraphQL APIs.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'REST uses multiple endpoints with HTTP methods, while GraphQL uses a single endpoint with flexible queries. GraphQL allows clients to request specific data, reducing over-fetching.',
-          technologies: ['API', 'REST', 'GraphQL']
-        },
-        {
-          text: 'What is the difference between SQL and NoSQL databases?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'SQL databases are relational with structured schemas, ACID compliance. NoSQL databases are non-relational, flexible schemas, better for horizontal scaling.',
-          technologies: ['Database', 'SQL', 'NoSQL', 'PostgreSQL', 'MongoDB']
-        },
-        {
-          text: 'Explain the concept of closures in JavaScript.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'A closure is a function that has access to variables in its outer scope even after the outer function has returned. It creates a persistent scope.',
-          technologies: ['JavaScript']
-        },
-        {
-          text: 'How would you optimize a slow-loading web application?',
-          type: 'problem-solving',
-          difficulty: 'medium',
-          expectedAnswer: 'Code splitting, lazy loading, image optimization, caching, CDN usage, minification, database query optimization, and performance monitoring.',
-          technologies: ['Performance', 'React', 'JavaScript', 'CSS']
-        },
-        {
-          text: 'Describe your experience with version control systems.',
-          type: 'experience',
-          difficulty: 'easy',
-          expectedAnswer: 'Experience with Git, branching strategies, merge conflicts resolution, pull requests, and collaborative development workflows.',
-          technologies: ['Git', 'GitHub']
-        },
-        {
-          text: 'Explain React component lifecycle methods.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Lifecycle methods like componentDidMount, componentDidUpdate, componentWillUnmount control component behavior during mounting, updating, and unmounting phases.',
-          technologies: ['React', 'JavaScript']
-        },
-        {
-          text: 'What is Node.js and how does it work?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Node.js is a JavaScript runtime built on Chrome V8 engine. It uses event-driven, non-blocking I/O model making it efficient for scalable network applications.',
-          technologies: ['Node.js', 'JavaScript']
-        },
-        {
-          text: 'Explain database indexing and its importance.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Database indexing creates data structures to speed up query performance by avoiding full table scans, but increases storage and write overhead.',
-          technologies: ['Database', 'PostgreSQL', 'SQL']
-        }
-      ],
-      'Frontend Developer': [
-        {
-          text: 'What are React Hooks and why are they useful?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Hooks allow functional components to use state and lifecycle methods. They promote code reuse and make components more readable.',
-          technologies: ['React', 'JavaScript']
-        },
-        {
-          text: 'Explain the CSS Box Model.',
-          type: 'technical',
-          difficulty: 'easy',
-          expectedAnswer: 'The box model consists of content, padding, border, and margin. It determines how elements are sized and spaced.',
-          technologies: ['CSS', 'HTML']
-        },
-        {
-          text: 'How do you ensure cross-browser compatibility?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Use CSS prefixes, polyfills, feature detection, testing across browsers, and following web standards.',
-          technologies: ['CSS', 'JavaScript', 'HTML']
-        },
-        {
-          text: 'What is the Virtual DOM in React?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Virtual DOM is a JavaScript representation of the real DOM. React uses it to efficiently update the UI by comparing changes.',
-          technologies: ['React', 'JavaScript']
-        },
-        {
-          text: 'How do you optimize website performance?',
-          type: 'problem-solving',
-          difficulty: 'medium',
-          expectedAnswer: 'Image optimization, code splitting, lazy loading, caching, minification, CDN usage, and reducing HTTP requests.',
-          technologies: ['Performance', 'JavaScript', 'CSS']
-        },
-        {
-          text: 'Explain CSS Flexbox and Grid.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Flexbox is for one-dimensional layouts, Grid is for two-dimensional layouts. Both provide powerful layout capabilities.',
-          technologies: ['CSS', 'HTML']
-        },
-        {
-          text: 'What is TypeScript and its benefits?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'TypeScript adds static typing to JavaScript, providing better IDE support, early error detection, and improved code maintainability.',
-          technologies: ['TypeScript', 'JavaScript']
-        }
-      ],
-      'Backend Developer': [
-        {
-          text: 'Explain the difference between authentication and authorization.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Authentication verifies who you are (login), authorization determines what you can access (permissions).',
-          technologies: ['Security', 'API']
-        },
-        {
-          text: 'What is database indexing and why is it important?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Indexing creates data structures to speed up query performance by avoiding full table scans, but increases storage and write overhead.',
-          technologies: ['Database', 'PostgreSQL', 'SQL']
-        },
-        {
-          text: 'How do you handle errors in a REST API?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Use appropriate HTTP status codes, consistent error response format, logging, and graceful error handling with try-catch blocks.',
-          technologies: ['API', 'REST', 'Node.js']
-        },
-        {
-          text: 'Explain microservices architecture.',
-          type: 'technical',
-          difficulty: 'hard',
-          expectedAnswer: 'Microservices break applications into small, independent services that communicate via APIs, enabling scalability and technology diversity.',
-          technologies: ['Architecture', 'API']
-        },
-        {
-          text: 'How do you ensure API security?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Use HTTPS, authentication tokens, input validation, rate limiting, CORS configuration, and security headers.',
-          technologies: ['Security', 'API', 'Node.js']
-        },
-        {
-          text: 'What is Docker and containerization?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Docker packages applications with dependencies into containers, ensuring consistent environments across development and production.',
-          technologies: ['Docker', 'DevOps']
-        }
-      ],
-      'Data Scientist': [
-        {
-          text: 'Explain the difference between supervised and unsupervised learning.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Supervised learning uses labeled data to predict outcomes, unsupervised learning finds patterns in unlabeled data.',
-          technologies: ['Machine Learning', 'Python']
-        },
-        {
-          text: 'What is overfitting and how do you prevent it?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Overfitting occurs when a model learns training data too well. Prevent with cross-validation, regularization, and more training data.',
-          technologies: ['Machine Learning', 'Python']
-        },
-        {
-          text: 'Explain the concept of feature engineering.',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Feature engineering involves creating, selecting, and transforming variables to improve model performance and interpretability.',
-          technologies: ['Machine Learning', 'Python', 'Data Analysis']
-        },
-        {
-          text: 'How do you handle missing data in datasets?',
-          type: 'problem-solving',
-          difficulty: 'medium',
-          expectedAnswer: 'Methods include deletion, imputation (mean, median, mode), interpolation, or using algorithms that handle missing values.',
-          technologies: ['Data Analysis', 'Python', 'Pandas']
-        },
-        {
-          text: 'What metrics do you use to evaluate classification models?',
-          type: 'technical',
-          difficulty: 'medium',
-          expectedAnswer: 'Accuracy, precision, recall, F1-score, ROC-AUC, confusion matrix, depending on the problem and class distribution.',
-          technologies: ['Machine Learning', 'Python']
-        }
-      ]
-    };
-
-    let roleQuestions = questionBank[role] || questionBank['Full Stack Developer'];
-    
-    // Filter questions based on technologies if provided
-    if (technologies && technologies.length > 0) {
-      const techLower = technologies.map(tech => tech.toLowerCase());
-      roleQuestions = roleQuestions.filter(question => 
-        question.technologies.some(qTech => 
-          techLower.some(tech => qTech.toLowerCase().includes(tech) || tech.includes(qTech.toLowerCase()))
-        )
-      );
-      
-      // If no tech-specific questions found, fall back to general questions
-      if (roleQuestions.length === 0) {
-        roleQuestions = questionBank[role] || questionBank['Full Stack Developer'];
-      }
-    }
-
-    return roleQuestions.slice(0, count);
   }
 
   // Simple scoring algorithm

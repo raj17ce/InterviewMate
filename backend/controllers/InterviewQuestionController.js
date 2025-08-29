@@ -4,7 +4,7 @@ const Interview = require('../models/Interview');
 // Generate questions for an interview
 const generateQuestions = async (req, res, next) => {
   try {
-    const { interview_id, question_count = 5 } = req.query;
+    const { interview_id} = req.query;
 
     if (!interview_id) {
       return res.status(400).json({
@@ -24,7 +24,7 @@ const generateQuestions = async (req, res, next) => {
 
     // Check if questions already exist for this interview
     const existingQuestions = await InterviewQuestion.getByInterviewId(interview_id);
-    if (existingQuestions.length > 0) {
+    if (existingQuestions.length > 50) {
       return res.status(200).json({
         success: true,
         message: 'Questions already generated for this interview',
@@ -36,8 +36,7 @@ const generateQuestions = async (req, res, next) => {
     const questions = await InterviewQuestion.generateQuestions(
       interview_id, 
       interview.role, 
-      interview.technologies || [],
-      parseInt(question_count)
+      interview.technologies || []
     );
 
     res.status(201).json({
